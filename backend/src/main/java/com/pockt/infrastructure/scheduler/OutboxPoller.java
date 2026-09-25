@@ -15,6 +15,7 @@ import java.util.List;
 public class OutboxPoller {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxPoller.class);
+    private static final int MAX_ATTEMPTS = 5;
 
     private final OutboxRepository outboxRepository;
     private final NotificationService notificationService;
@@ -45,11 +46,18 @@ public class OutboxPoller {
                 log.debug("Successfully dispatched outbox entry {}", entry.id());
             } catch (Exception e) {
                 int nextAttempt = entry.attempts() + 1;
-                long backoffSeconds = (long) Math.min(3600, Math.pow(2, nextAttempt) * 5);
-                Instant nextRetry = Instant.now().plusSeconds(backoffSeconds);
-                outboxRepository.recordFailure(entry.id(), nextAttempt, nextRetry);
-                log.warn("Failed to dispatch outbox entry {}, will retry at {}: {}",
-                        entry.id(), nextRetry, e.getMessage());
+                String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                if (nextAttempt >= MAX_ATTEMPTS) {
+                    outboxRepository.markDeadLetter(entry.id(), errorMsg);
+                    log.error("Outbox entry {} reached max attempts ({}). Moved to DEAD_LETTER queue: {}",
+                            entry.id(), MAX_ATTEMPTS, errorMsg);
+                } else {
+                    long backoffSeconds = (long) Math.min(3600, Math.pow(2, nextAttempt) * 5);
+                    Instant nextRetry = Instant.now().plusSeconds(backoffSeconds);
+                    outboxRepository.recordFailure(entry.id(), nextAttempt, nextRetry, errorMsg);
+                    log.warn("Failed to dispatch outbox entry {}, will retry at {}: {}",
+                            entry.id(), nextRetry, errorMsg);
+                }
             }
         }
     }

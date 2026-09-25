@@ -93,6 +93,26 @@
 - **🚦 Redis Sliding-Window Rate Limiting**
   - Throttles sensitive endpoints: Transfers (10/min), Logins (5/min), and OTP dispatches (3/10min).
 
+- **🧾 Digital Receipt Generator & Public Verification Engine**
+  - Instant receipt generation for both P2P transfers and utility bill payments with unique human-readable references.
+  - Printable HTML invoices featuring clean CSS typography, status badges, breakdown of amounts, sender/recipient metadata, and SHA-256 digital signature hashes.
+  - Public `/api/v1/receipts/verify/{hash}` verification endpoint enabling any third party to validate payment authenticity without requiring authentication.
+
+- **📧 Email Notifications & Outbox Dispatch with Attachments**
+  - Outbox notification pipeline extended with rich email support and file attachments.
+  - Pluggable `EmailProvider` interface with `LogEmailProvider` and ready integration for SendGrid, AWS SES, or SMTP.
+  - Generates and attaches transaction invoices directly to outgoing notification emails.
+
+- **📥 Queue Management & Dead Letter Queue (DLQ)**
+  - Resilient asynchronous processing with exponential backoff retries (capped at 5 attempts).
+  - Failed messages automatically transition to `DEAD_LETTER` status recording `last_error` and `dead_lettered_at` timestamp.
+  - Admin operational controls: live queue health metrics, DLQ inspection, individual message replay, and bulk replay.
+
+- **⚖️ In-Process Transaction Reconciliation & Reversal Engine**
+  - Background `@Scheduled` job detects stuck `PENDING` transactions exceeding threshold (5 minutes) and initiates automated refunds.
+  - Formal customer dispute registration for suspicious or failed transactions (`POST /api/v1/disputes/{id}`).
+  - Admin dispute review and atomic reversal workflow: reverses sender/receiver balances in a single transaction with audit logging and duplicate reversal protection.
+
 ---
 
 ## 📂 Repository & Folder Structure
@@ -232,22 +252,41 @@ pouch-wallet/
 │   │   │   │   ├── repository/         # AdminRepository (SQL aggregations with time filter)
 │   │   │   │   └── service/            # AdminService
 │   │   │   │
+│   │   │   ├── receipt/                # RECEIPT & INVOICE ENGINE MODULE
+│   │   │   │   ├── api/                # ReceiptController (JSON receipt, HTML download, public SHA-256 verification)
+│   │   │   │   ├── dto/                # ReceiptResponse
+│   │   │   │   ├── internal/           # ReceiptServiceImpl
+│   │   │   │   └── service/            # ReceiptService
+│   │   │   │
+│   │   │   ├── queue/                  # QUEUE & DEAD LETTER QUEUE (DLQ) MODULE
+│   │   │   │   ├── api/                # QueueAdminController (metrics, list DLQ, replay single, replay all)
+│   │   │   │   ├── dto/                # QueueMetricsResponse, DeadLetterItemResponse
+│   │   │   │   ├── internal/           # QueueServiceImpl
+│   │   │   │   └── service/            # QueueService
+│   │   │   │
+│   │   │   ├── reconciliation/         # RECONCILIATION & REVERSAL ENGINE MODULE
+│   │   │   │   ├── api/                # DisputeController, ReconciliationAdminController
+│   │   │   │   ├── dto/                # DisputeRequest, ReversalResponse, ReconciliationSummaryResponse
+│   │   │   │   ├── internal/           # ReconciliationServiceImpl (@Scheduled reconciler, atomic balance reversal)
+│   │   │   │   ├── repository/         # ReconciliationRepository
+│   │   │   │   └── service/            # ReconciliationService
+│   │   │   │
 │   │   │   └── notification/           # NOTIFICATION MODULE
 │   │   │       ├── internal/           # NotificationServiceImpl
 │   │   │       ├── listener/           # TransferEventListener
-│   │   │       ├── provider/           # PushProvider (Log/FCM), SmsProvider (Log/Twilio)
+│   │   │       ├── provider/           # PushProvider (Log/FCM), SmsProvider (Log/Twilio), EmailProvider (Log/SMTP/Attachments)
 │   │   │       └── service/            # NotificationService
 │   │   │
 │   │   └── resources/
 │   │       ├── application.yml         # Base configuration (HikariCP, Redis, Flyway)
 │   │       ├── application-dev.yml     # Local dev profile configuration
 │   │       ├── keys/                   # RS256 RSA keypair (private.pem, public.pem)
-│   │       └── db/migration/           # Flyway SQL migrations (V1 to V15)
+│   │       └── db/migration/           # Flyway SQL migrations (V1 to V16)
 │   │
 │   └── src/test/java/com/pockt/        # Comprehensive test suite
 │       ├── ArchitectureTest.java       # ArchUnit package boundary enforcement
 │       ├── HealthEndpointTest.java     # Health & database probe validation
-│       ├── integration/                # FullFlowIntegrationTest, PaytmEcosystemIntegrationTest, PaytmConsumerFeaturesIntegrationTest
+│       ├── integration/                # FullFlowIntegrationTest, PaytmEcosystemIntegrationTest, EnterpriseOperationsIntegrationTest
 │       ├── bank/                       # BankServiceTest
 │       ├── upi/                        # UpiServiceTest
 │       ├── qr/                         # QrServiceTest
@@ -283,6 +322,7 @@ Migrations are managed with **Flyway** in `backend/src/main/resources/db/migrati
 | `V13` | `create_payment_requests` | `payment_requests` with status, expiry, and split group tracking |
 | `V14` | `create_kyc_verifications` | `kyc_verifications` with document details, review status, and `kyc_tier` |
 | `V15` | `create_rewards_and_analytics` | `scratch_cards` table and `category` column added to `transactions` |
+| `V16` | `enhance_notification_outbox_and_dlq` | Adds `last_error`, `dead_lettered_at` to outbox; adds `disputed`, `dispute_reason`, `reversed_at` to transactions |
 
 ---
 
@@ -402,7 +442,25 @@ All responses follow the unified envelope:
 - `PATCH /api/v1/admin/users/{id}/status` — Account suspension and activation
 - `PATCH /api/v1/admin/wallets/{id}/freeze` — Freeze or unfreeze specific wallets
 
-### 15. System Health (`/health`, `/api/v1/health`, `/actuator/health`)
+### 15. Receipt Generation & Verification (`/api/v1/receipts`)
+- `GET  /api/v1/receipts/{reference}` — Structured JSON receipt for any transfer or bill payment
+- `GET  /api/v1/receipts/{reference}/download` — Downloadable print-ready HTML invoice receipt
+- `GET  /api/v1/receipts/verify/{hash}` — Public SHA-256 digital receipt integrity verification (no auth required)
+
+### 16. Queue & Dead Letter Queue (DLQ) Management (`/api/v1/admin/queue`)
+- `GET  /api/v1/admin/queue/metrics` — [Admin] Real-time outbox & DLQ metrics (counts by status)
+- `GET  /api/v1/admin/queue/dlq` — [Admin] Inspect dead-lettered messages and failure reasons
+- `POST /api/v1/admin/queue/dlq/{id}/replay` — [Admin] Replay individual dead-lettered message
+- `POST /api/v1/admin/queue/dlq/replay-all` — [Admin] Bulk replay all dead-lettered tasks
+
+### 17. Reconciliation, Disputes & Reversals (`/api/v1/disputes`, `/api/v1/admin/reconciliation`)
+- `POST /api/v1/disputes/{transactionId}` — Register a dispute on a suspicious/failed transaction
+- `GET  /api/v1/disputes/my-disputes` — List active disputes filed by user
+- `POST /api/v1/admin/reconciliation/run` — [Admin] Manually trigger stuck transaction reconciliation
+- `POST /api/v1/admin/reconciliation/transactions/{id}/reverse` — [Admin] Reverse transaction & refund balances atomically
+- `GET  /api/v1/admin/reconciliation/summary` — [Admin] Summary report of pending, disputed, and reversed transactions
+
+### 18. System Health (`/health`, `/api/v1/health`, `/actuator/health`)
 - Dynamic health status probing live PostgreSQL connection and Redis cluster connectivity with ISO-8601 UTC timestamp.
 
 ---

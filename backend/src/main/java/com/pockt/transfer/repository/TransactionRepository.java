@@ -117,4 +117,19 @@ public class TransactionRepository extends BaseRepository {
 
         return jdbc.query(sql.toString(), params, txMapper);
     }
+
+    public Optional<Transaction> findByIdPrefix(String prefix) {
+        String sql = """
+            SELECT id, idempotency_key, sender_wallet_id, receiver_wallet_id,
+                   amount, currency, status, description, failure_reason, category, created_at, updated_at
+            FROM transactions
+            WHERE id::text LIKE :pattern
+            LIMIT 1
+            """;
+        try {
+            return Optional.ofNullable(jdbc.queryForObject(sql, Map.of("pattern", prefix.toLowerCase() + "%"), txMapper));
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
 }

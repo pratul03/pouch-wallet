@@ -11,5 +11,11 @@ public record NotificationOutbox(
     String status,
     int attempts,
     Instant nextRetry,
+    String lastError,
+    Instant deadLetteredAt,
     Instant createdAt
-) {}
+) {
+    public NotificationOutbox(UUID id, UUID userId, String type, String payload, String status, int attempts, Instant nextRetry, Instant createdAt) {
+        this(id, userId, type, payload, status, attempts, nextRetry, null, null, createdAt);
+    }
+}

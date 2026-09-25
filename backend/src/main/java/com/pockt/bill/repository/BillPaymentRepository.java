@@ -84,4 +84,13 @@ public class BillPaymentRepository extends BaseRepository {
             """;
         return jdbc.query(sql, Map.of("userId", userId), mapper);
     }
+
+    public Optional<BillPayment> findByIdPrefix(String prefix) {
+        String sql = "SELECT * FROM bill_payments WHERE id::text LIKE :pattern LIMIT 1";
+        try {
+            return Optional.ofNullable(jdbc.queryForObject(sql, Map.of("pattern", prefix.toLowerCase() + "%"), mapper));
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
 }

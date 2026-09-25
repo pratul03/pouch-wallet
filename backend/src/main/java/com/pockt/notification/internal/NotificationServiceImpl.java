@@ -3,6 +3,7 @@ package com.pockt.notification.internal;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pockt.infrastructure.util.MoneyUtils;
+import com.pockt.notification.provider.EmailProvider;
 import com.pockt.notification.provider.PushProvider;
 import com.pockt.notification.provider.SmsProvider;
 import com.pockt.notification.service.NotificationService;
@@ -12,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,15 +24,20 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final PushProvider pushProvider;
     private final SmsProvider smsProvider;
+    private final EmailProvider emailProvider;
     private final UserService userService;
     private final ObjectMapper objectMapper;
 
-    public NotificationServiceImpl(PushProvider pushProvider,
-                                   SmsProvider smsProvider,
-                                   UserService userService,
-                                   ObjectMapper objectMapper) {
+    public NotificationServiceImpl(
+            PushProvider pushProvider,
+            SmsProvider smsProvider,
+            EmailProvider emailProvider,
+            UserService userService,
+            ObjectMapper objectMapper
+    ) {
         this.pushProvider = pushProvider;
         this.smsProvider = smsProvider;
+        this.emailProvider = emailProvider;
         this.userService = userService;
         this.objectMapper = objectMapper;
     }
@@ -75,9 +82,28 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public void sendEmailReceipt(UUID userId, String recipientEmail, String subject, String htmlContent, String attachmentFilename, byte[] attachmentBytes) {
+        emailProvider.sendEmail(recipientEmail, subject, htmlContent, attachmentFilename, attachmentBytes);
+    }
+
+    @Override
     public void processOutboxEntry(UUID outboxId, UUID userId, String type, String payload) {
         try {
             Map<String, Object> data = objectMapper.readValue(payload, new TypeReference<>() {});
+
+            if ("EMAIL_RECEIPT".equalsIgnoreCase(type)) {
+                String to = (String) data.getOrDefault("recipientEmail", "user@pockt.io");
+                String subject = (String) data.getOrDefault("subject", "Your Pockt Payment Receipt");
+                String html = (String) data.getOrDefault("htmlContent", "");
+                String filename = (String) data.getOrDefault("attachmentFilename", "receipt.html");
+                String base64Attachment = (String) data.get("attachmentBase64");
+                byte[] bytes = base64Attachment != null ? Base64.getDecoder().decode(base64Attachment) : html.getBytes();
+
+                emailProvider.sendEmail(to, subject, html, filename, bytes);
+                log.info("Processed outbox EMAIL_RECEIPT for outboxId {}", outboxId);
+                return;
+            }
+
             String title = (String) data.getOrDefault("title", "Wallet Update");
             String body = (String) data.getOrDefault("body", "");
 
