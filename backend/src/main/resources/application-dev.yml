@@ -1,0 +1,9 @@
+logging:
+  level:
+    com.pockt: DEBUG
+    org.springframework.jdbc: DEBUG
+
+pockt:
+  notification:
+    push-provider: log
+    sms-provider: log

@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+bin/
+**/bin/
+backend/bin/
+backend/.gradle/
+backend/build/
+.gradle/
+build/
+.vscode/
