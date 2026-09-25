@@ -16,6 +16,14 @@ public record ApiResponse<T>(
         return new ApiResponse<>(true, data, null, currentRequestId(), Instant.now());
     }
 
+    public static <T> ApiResponse<T> ok(T data) {
+        return success(data);
+    }
+
+    public static <T> ApiResponse<T> ok() {
+        return success(null);
+    }
+
     public static <T> ApiResponse<T> error(ApiError error) {
         return new ApiResponse<>(false, null, error, currentRequestId(), Instant.now());
     }

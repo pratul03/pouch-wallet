@@ -29,6 +29,7 @@ public class TransactionRepository extends BaseRepository {
             TransactionStatus.valueOf(rs.getString("status")),
             rs.getString("description"),
             rs.getString("failure_reason"),
+            rs.getString("category") != null ? rs.getString("category") : "TRANSFER",
             getInstant(rs, "created_at"),
             getInstant(rs, "updated_at")
     );
@@ -41,11 +42,11 @@ public class TransactionRepository extends BaseRepository {
         String sql = """
             INSERT INTO transactions (
                 id, idempotency_key, sender_wallet_id, receiver_wallet_id,
-                amount, currency, status, description, failure_reason, created_at, updated_at
+                amount, currency, status, description, failure_reason, category, created_at, updated_at
             )
             VALUES (
                 :id, :idempotencyKey, :senderWalletId, :receiverWalletId,
-                :amount, :currency, :status, :description, :failureReason, :createdAt, :updatedAt
+                :amount, :currency, :status, :description, :failureReason, :category, :createdAt, :updatedAt
             )
             """;
         MapSqlParameterSource params = new MapSqlParameterSource()
@@ -58,6 +59,7 @@ public class TransactionRepository extends BaseRepository {
                 .addValue("status", tx.status().name())
                 .addValue("description", tx.description())
                 .addValue("failureReason", tx.failureReason())
+                .addValue("category", tx.category() != null ? tx.category() : "TRANSFER")
                 .addValue("createdAt", Timestamp.from(tx.createdAt()))
                 .addValue("updatedAt", Timestamp.from(tx.updatedAt()));
         jdbc.update(sql, params);
@@ -66,7 +68,7 @@ public class TransactionRepository extends BaseRepository {
     public Optional<Transaction> findById(UUID id) {
         String sql = """
             SELECT id, idempotency_key, sender_wallet_id, receiver_wallet_id,
-                   amount, currency, status, description, failure_reason, created_at, updated_at
+                   amount, currency, status, description, failure_reason, category, created_at, updated_at
             FROM transactions
             WHERE id = :id
             """;
@@ -81,7 +83,7 @@ public class TransactionRepository extends BaseRepository {
     public Optional<Transaction> findByIdempotencyKey(String idempotencyKey) {
         String sql = """
             SELECT id, idempotency_key, sender_wallet_id, receiver_wallet_id,
-                   amount, currency, status, description, failure_reason, created_at, updated_at
+                   amount, currency, status, description, failure_reason, category, created_at, updated_at
             FROM transactions
             WHERE idempotency_key = :idempotencyKey
             """;
@@ -96,7 +98,7 @@ public class TransactionRepository extends BaseRepository {
     public List<Transaction> findByWalletIdCursor(UUID walletId, Instant cursorTime, UUID cursorId, int limit) {
         StringBuilder sql = new StringBuilder("""
             SELECT id, idempotency_key, sender_wallet_id, receiver_wallet_id,
-                   amount, currency, status, description, failure_reason, created_at, updated_at
+                   amount, currency, status, description, failure_reason, category, created_at, updated_at
             FROM transactions
             WHERE (sender_wallet_id = :walletId OR receiver_wallet_id = :walletId)
             """);

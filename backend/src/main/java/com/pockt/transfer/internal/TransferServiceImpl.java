@@ -113,6 +113,18 @@ public class TransferServiceImpl implements TransferService {
             throw new SelfTransferException();
         }
 
+        // KYC Tier transfer limit enforcement
+        boolean isVerified = "VERIFIED".equalsIgnoreCase(senderUser.kycStatus()) || senderUser.kycTier() >= 1;
+        long maxTransferCents = isVerified ? 2_500_000L : 25_000L;
+        if (request.amount() > maxTransferCents) {
+            throw new com.pockt.infrastructure.exception.PocktException(
+                    com.pockt.infrastructure.exception.ErrorCode.KYC_TIER_LIMIT_EXCEEDED,
+                    String.format("Transfer amount of $%.2f exceeds your KYC Tier %d single transfer limit of $%.2f. Upgrade KYC to increase limits.",
+                            request.amount() / 100.0, senderUser.kycTier(), maxTransferCents / 100.0),
+                    org.springframework.http.HttpStatus.BAD_REQUEST
+            );
+        }
+
         // Rate limit check
         rateLimitService.checkTransferRateLimit(senderUserId.toString());
 
@@ -165,6 +177,7 @@ public class TransferServiceImpl implements TransferService {
                 TransactionStatus.COMPLETED,
                 request.description(),
                 null,
+                "TRANSFER",
                 now,
                 now
         );

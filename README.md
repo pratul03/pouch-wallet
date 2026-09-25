@@ -16,6 +16,37 @@
   - Clients supply a unique `X-Idempotency-Key` (UUID) with every transfer.
   - Duplicate requests automatically detect cached transaction records and return identical responses without re-debiting.
 
+- **👥 Saved Beneficiaries & Favorite Payees**
+  - Save frequent payees by Phone Number, UPI VPA (`user@pockt`), or Bank Account + IFSC.
+  - Quick 1-tap transfer access, nickname aliases, and toggleable favorites list.
+
+- **💡 Utility Bill Payments & Mobile Recharge Simulator**
+  - 6 major utility categories: Mobile Recharge, Electricity, Water, Broadband & Fiber, DTH / Cable TV, and Domestic Gas.
+  - Integrated biller catalog (Airtel, Jio, BESCOM, Tata Power, BWSSB, ACT Fibernet, Tata Play, Indane).
+  - Simulated bill fetcher computing outstanding amounts, customer names, and due dates.
+  - Atomic wallet balance payment with unique reference generation (`BPAY-XXXXX`) and transactional outbox notifications.
+
+- **🤝 Payment Requests & Multi-Person Split Bill Engine**
+  - **1-on-1 Requests**: Request money from any contact via Phone or VPA with custom notes and configurable expiry.
+  - **Split Bill**: Group expense splitting with shared `split_group_id` across multiple participants.
+  - **Atomic Settle**: Payers accept incoming requests directly from the app; transfers execute instantly via the core deadlock-free P2P transfer engine.
+
+- **📜 KYC Verification & Tiered Limits**
+  - Identity document submission (Passport, National ID, PAN, Driving License).
+  - Two-tier compliance architecture:
+    - **Tier 0 (Unverified)**: Max balance $1,000.00; Max single transfer $250.00.
+    - **Tier 1 (Verified)**: Max balance $100,000.00; Max single transfer $25,000.00.
+  - Admin approval workflow with automatic status transitions and real-time limit upgrades.
+
+- **📊 Spending Analytics & Transaction Categorization**
+  - Automatic categorization across `FOOD_AND_DINING`, `SHOPPING`, `UTILITIES_AND_BILLS`, `TRANSFER`, `ENTERTAINMENT`, `TRAVEL`, and `OTHER`.
+  - Monthly breakdown of total debits, total credits, net cash flow, and percentage share by category.
+
+- **🎁 Cashback & Scratch Card Rewards Engine**
+  - Automatic scratch card generation upon completing qualifying transfers ($10+) and bill payments.
+  - Google Pay / Paytm style scratch-to-reveal mechanism where reward values stay hidden until scratched.
+  - Unlocked cashback immediately credits into the user's wallet with outbox push notification.
+
 - **🏦 Simulated Bank Server & Core Banking Simulator**
   - Link external bank accounts (IFSC + Account Number verification).
   - **Add Money (Bank ➔ Wallet)**: Move funds seamlessly from bank into wallet with PIN authentication.
@@ -53,7 +84,7 @@
   - Opaque refresh tokens stored in Redis with 30-day TTL, rotated on use and revocable on logout.
 
 - **📦 Transactional Outbox Pattern for Notifications**
-  - Writes transfer events (`TRANSFER_SENT`, `TRANSFER_RECEIVED`) directly into `notification_outbox` in the same DB transaction as money transfers.
+  - Writes transfer events (`TRANSFER_SENT`, `TRANSFER_RECEIVED`, `BILL_PAYMENT_SUCCESS`, `CASHBACK_CREDITED`) directly into `notification_outbox` in the same DB transaction.
   - Background `OutboxPoller` executes `@Scheduled` jobs using `SELECT ... FOR UPDATE SKIP LOCKED` with exponential backoff retry.
 
 - **📝 Append-Only Audit Logging**
@@ -89,7 +120,7 @@ pouch-wallet/
 │   │   │   │   ├── scheduler/          # OutboxPoller (@Scheduled SKIP LOCKED)
 │   │   │   │   ├── security/           # JwtFilter, SecurityConfig, JwtService, UserPrincipal
 │   │   │   │   ├── util/               # MoneyUtils (cents formatting & currency display)
-│   │   │   │   └── web/                # ApiResponse envelope, ApiError, GlobalExceptionHandler
+│   │   │   │   └── web/                # ApiResponse envelope, ApiError, GlobalExceptionHandler, HealthController
 │   │   │   │
 │   │   │   ├── user/                   # USER & AUTH MODULE
 │   │   │   │   ├── api/                # AuthController, UserController
@@ -116,6 +147,53 @@ pouch-wallet/
 │   │   │   │   ├── internal/           # TransferServiceImpl (deadlock-free saga coordinator)
 │   │   │   │   ├── repository/         # TransactionRepository, AuditRepository, OutboxRepository
 │   │   │   │   └── service/            # TransferService
+│   │   │   │
+│   │   │   ├── beneficiary/            # BENEFICIARY & SAVED PAYEES MODULE
+│   │   │   │   ├── api/                # BeneficiaryController
+│   │   │   │   ├── domain/             # Beneficiary record
+│   │   │   │   ├── dto/                # AddBeneficiaryRequest, BeneficiaryResponse
+│   │   │   │   ├── internal/           # BeneficiaryServiceImpl
+│   │   │   │   ├── repository/         # BeneficiaryRepository
+│   │   │   │   └── service/            # BeneficiaryService
+│   │   │   │
+│   │   │   ├── bill/                   # UTILITY BILLS & RECHARGE MODULE
+│   │   │   │   ├── api/                # BillController
+│   │   │   │   ├── domain/             # BillPayment record
+│   │   │   │   ├── dto/                # FetchBillRequest, PayBillRequest, BillDetailsResponse, BillPaymentResponse
+│   │   │   │   ├── internal/           # BillPaymentServiceImpl
+│   │   │   │   ├── repository/         # BillPaymentRepository
+│   │   │   │   └── service/            # BillPaymentService
+│   │   │   │
+│   │   │   ├── request/                # PAYMENT REQUESTS & SPLIT BILL MODULE
+│   │   │   │   ├── api/                # PaymentRequestController
+│   │   │   │   ├── domain/             # PaymentRequest record
+│   │   │   │   ├── dto/                # CreatePaymentRequest, SplitBillRequest, PaymentRequestResponse
+│   │   │   │   ├── internal/           # PaymentRequestServiceImpl
+│   │   │   │   ├── repository/         # PaymentRequestRepository
+│   │   │   │   └── service/            # PaymentRequestService
+│   │   │   │
+│   │   │   ├── kyc/                    # KYC & TIERED LIMITS MODULE
+│   │   │   │   ├── api/                # KycController, KycAdminController
+│   │   │   │   ├── domain/             # KycVerification record
+│   │   │   │   ├── dto/                # SubmitKycRequest, ReviewKycRequest, KycStatusResponse, KycVerificationResponse
+│   │   │   │   ├── internal/           # KycServiceImpl
+│   │   │   │   ├── repository/         # KycRepository
+│   │   │   │   └── service/            # KycService
+│   │   │   │
+│   │   │   ├── analytics/              # SPENDING ANALYTICS MODULE
+│   │   │   │   ├── api/                # AnalyticsController
+│   │   │   │   ├── dto/                # SpendingSummaryResponse, CategorySpendingItem
+│   │   │   │   ├── internal/           # AnalyticsServiceImpl
+│   │   │   │   ├── repository/         # AnalyticsRepository
+│   │   │   │   └── service/            # AnalyticsService
+│   │   │   │
+│   │   │   ├── reward/                 # CASHBACK & REWARDS MODULE
+│   │   │   │   ├── api/                # RewardController
+│   │   │   │   ├── domain/             # ScratchCard record
+│   │   │   │   ├── dto/                # ScratchCardResponse, RewardsSummaryResponse
+│   │   │   │   ├── internal/           # RewardServiceImpl, RewardEventListener
+│   │   │   │   ├── repository/         # ScratchCardRepository
+│   │   │   │   └── service/            # RewardService
 │   │   │   │
 │   │   │   ├── bank/                   # BANK SIMULATOR MODULE
 │   │   │   │   ├── api/                # BankController (link, add-money, withdraw, history)
@@ -164,11 +242,12 @@ pouch-wallet/
 │   │       ├── application.yml         # Base configuration (HikariCP, Redis, Flyway)
 │   │       ├── application-dev.yml     # Local dev profile configuration
 │   │       ├── keys/                   # RS256 RSA keypair (private.pem, public.pem)
-│   │       └── db/migration/           # Flyway SQL migrations (V1 to V10)
+│   │       └── db/migration/           # Flyway SQL migrations (V1 to V15)
 │   │
 │   └── src/test/java/com/pockt/        # Comprehensive test suite
 │       ├── ArchitectureTest.java       # ArchUnit package boundary enforcement
-│       ├── integration/                # FullFlowIntegrationTest, PaytmEcosystemIntegrationTest
+│       ├── HealthEndpointTest.java     # Health & database probe validation
+│       ├── integration/                # FullFlowIntegrationTest, PaytmEcosystemIntegrationTest, PaytmConsumerFeaturesIntegrationTest
 │       ├── bank/                       # BankServiceTest
 │       ├── upi/                        # UpiServiceTest
 │       ├── qr/                         # QrServiceTest
@@ -199,6 +278,11 @@ Migrations are managed with **Flyway** in `backend/src/main/resources/db/migrati
 | `V8` | `create_upi_handles` | Unique `vpa` handles linked to wallets, indexed lookup |
 | `V9` | `create_cards_and_credit` | `cards` (masked + full PAN, CVV, expiry, daily limits) & `credit_accounts` |
 | `V10` | `add_user_roles` | Adds `role` (`USER`, `ADMIN`) to users table for back-office security |
+| `V11` | `create_beneficiaries` | `beneficiaries` with phone, VPA, bank details, and favorite flag |
+| `V12` | `create_bill_payments` | `bill_payments` with biller ID, category, consumer number, and reference |
+| `V13` | `create_payment_requests` | `payment_requests` with status, expiry, and split group tracking |
+| `V14` | `create_kyc_verifications` | `kyc_verifications` with document details, review status, and `kyc_tier` |
+| `V15` | `create_rewards_and_analytics` | `scratch_cards` table and `category` column added to `transactions` |
 
 ---
 
@@ -240,7 +324,46 @@ All responses follow the unified envelope:
 - `GET  /api/v1/transfers?cursor=&limit=20` — Cursor-paginated transfer history
 - `GET  /api/v1/transfers/{id}` — Detailed transaction receipt
 
-### 4. Bank Account Simulator (`/api/v1/banks`)
+### 4. Saved Beneficiaries (`/api/v1/beneficiaries`)
+- `POST /api/v1/beneficiaries` — Save a new payee (phone, VPA, or bank account)
+- `GET  /api/v1/beneficiaries?favoritesOnly=` — List saved beneficiaries
+- `GET  /api/v1/beneficiaries/{id}` — Get beneficiary details
+- `DELETE /api/v1/beneficiaries/{id}` — Delete a saved beneficiary
+- `PATCH /api/v1/beneficiaries/{id}/favorite?favorite=` — Toggle favorite status
+
+### 5. Utility Bills & Recharge (`/api/v1/bills`)
+- `GET  /api/v1/bills/categories` — List supported bill categories (Mobile, Power, Water, etc.)
+- `GET  /api/v1/bills/billers?category=` — List billers for a category
+- `POST /api/v1/bills/fetch` — Fetch simulated bill details by consumer number
+- `POST /api/v1/bills/pay` — Pay bill using wallet balance
+- `GET  /api/v1/bills/history` — User bill payment history
+
+### 6. Payment Requests & Split Bill (`/api/v1/payment-requests`)
+- `POST /api/v1/payment-requests` — Request money from a contact
+- `POST /api/v1/payment-requests/split` — Create multi-person split bill
+- `GET  /api/v1/payment-requests/incoming` — View pending incoming requests
+- `GET  /api/v1/payment-requests/outgoing` — View outgoing requests created by user
+- `GET  /api/v1/payment-requests/{id}` — View payment request details
+- `POST /api/v1/payment-requests/{id}/accept` — Accept request and settle instantly via atomic wallet transfer
+- `POST /api/v1/payment-requests/{id}/decline` — Decline incoming payment request
+- `POST /api/v1/payment-requests/{id}/cancel` — Cancel pending outgoing request
+
+### 7. KYC & Verification (`/api/v1/kyc`, `/api/v1/admin/kyc`)
+- `POST /api/v1/kyc/submit` — Submit identity documents for verification
+- `GET  /api/v1/kyc/status` — View current KYC tier and transaction/balance limits
+- `GET  /api/v1/kyc/history` — View past KYC submissions
+- `GET  /api/v1/admin/kyc/pending` — [Admin] List pending KYC submissions
+- `POST /api/v1/admin/kyc/{id}/review` — [Admin] Approve or reject KYC documents
+
+### 8. Spending Analytics (`/api/v1/analytics`)
+- `GET  /api/v1/analytics/spending?month=&year=` — Monthly spending summary, category breakdown, percentages, and net cash flow
+
+### 9. Rewards & Cashback (`/api/v1/rewards`)
+- `GET  /api/v1/rewards/scratch-cards?unscratchedOnly=` — List scratch cards
+- `GET  /api/v1/rewards/summary` — Overview of total cashback won and card counts
+- `POST /api/v1/rewards/scratch-cards/{id}/scratch` — Scratch card and claim cashback directly into wallet
+
+### 10. Bank Account Simulator (`/api/v1/banks`)
 - `POST /api/v1/banks/link` — Link an external bank account
 - `GET  /api/v1/banks` — List all linked bank accounts
 - `GET  /api/v1/banks/{id}` — Get bank account details & simulated balance
@@ -249,60 +372,62 @@ All responses follow the unified envelope:
 - `POST /api/v1/banks/withdraw` — Withdraw funds from wallet to bank (requires PIN)
 - `GET  /api/v1/banks/{id}/transactions` — Bank transaction history
 
-### 5. Instant UPI & VPA Engine (`/api/v1/upi`)
-- `POST /api/v1/upi/handles` — Create custom UPI handle (e.g. `alex@pockt`)
-- `GET  /api/v1/upi/handles` — List UPI handles (auto-provisions default `<phone>@pockt`)
-- `GET  /api/v1/upi/verify?vpa=` — Verify recipient UPI ID before paying
-- `POST /api/v1/upi/pay` — Instant UPI transfer via VPA and PIN
+### 11. UPI & VPA Engine (`/api/v1/upi`)
+- `GET  /api/v1/upi/handles` — List all registered UPI handles
+- `POST /api/v1/upi/handles` — Register custom UPI handle (`name@pockt`)
+- `GET  /api/v1/upi/verify?vpa=` — Real-time recipient lookup & validation
+- `POST /api/v1/upi/pay` — PIN-authorized instant UPI transfer
 
-### 6. QR Code Ecosystem (`/api/v1/qr`)
-- `GET  /api/v1/qr/my-qr` — Get personal static UPI QR code payload
-- `POST /api/v1/qr/generate` — Generate dynamic QR code with pre-filled amount & note
-- `POST /api/v1/qr/scan` — Scan, parse, and validate raw QR payload or UPI URI
+### 12. QR Code Ecosystem (`/api/v1/qr`)
+- `GET  /api/v1/qr/my-qr` — Fetch personal static UPI QR code payload
+- `POST /api/v1/qr/dynamic` — Generate dynamic merchant QR code with amount & note
+- `POST /api/v1/qr/scan` — Scan and resolve QR code payload before payment
 
-### 7. Digital Cards & Credit (`/api/v1/cards`)
-- `POST /api/v1/cards/debit` — Issue virtual debit card linked to wallet
-- `POST /api/v1/cards/credit/apply` — Apply for digital credit card / Pockt Postpaid limit
-- `GET  /api/v1/cards` — List user's cards (masked)
-- `GET  /api/v1/cards/{id}` — Get single card details
-- `POST /api/v1/cards/{id}/reveal` — Reveal full 16-digit PAN and CVV with wallet PIN
-- `PATCH /api/v1/cards/{id}/settings` — Toggle online payments and daily spending limit
-- `POST /api/v1/cards/{id}/freeze` — Toggle freeze / unfreeze card
-- `POST /api/v1/cards/{id}/charge` — Simulate online merchant transaction
-- `GET  /api/v1/cards/credit/account` — View credit account balance and statement
-- `POST /api/v1/cards/credit/repay` — Repay outstanding credit bill from wallet balance
+### 13. Digital Cards & Credit (`/api/v1/cards`)
+- `POST  /api/v1/cards/debit` — Instant issuance of virtual debit card linked to wallet
+- `POST  /api/v1/cards/credit` — Apply for virtual credit card with revolving credit line
+- `GET   /api/v1/cards` — List all active digital cards (masked)
+- `POST  /api/v1/cards/{id}/reveal` — PIN-secured CVV and full PAN reveal
+- `PATCH /api/v1/cards/{id}/settings` — Toggle online usage and daily limit
+- `PATCH /api/v1/cards/{id}/freeze` — Freeze/unfreeze card instantly
+- `POST  /api/v1/cards/{id}/charge` — Merchant charge simulator
+- `GET   /api/v1/cards/credit-account` — View credit balance, limit, and bill amount
+- `POST  /api/v1/cards/credit-account/repay` — Repay credit bill from wallet balance
 
-### 8. Admin Back-Office (`/api/v1/admin`) *(Requires `ROLE_ADMIN`)*
-- `GET   /api/v1/admin/users` — Directory search with KYC & active status filters
-- `GET   /api/v1/admin/users/{userId}` — Comprehensive 360-degree user dossier
-- `GET   /api/v1/admin/users/{userId}/financials?from=&to=` — Financial volume metrics (spent, received, net flow, bank activity) with time filter
-- `PATCH /api/v1/admin/users/{userId}/status` — Activate or freeze user account
-- `PATCH /api/v1/admin/wallets/{walletId}/freeze` — Freeze or unfreeze specific wallet
-- `GET   /api/v1/admin/reports/overview?from=&to=` — Platform executive liquidity & transfer volume report with time filter
+### 14. Admin Back-Office (`/api/v1/admin`)
+- `GET   /api/v1/admin/users` — Paginated user directory with search and KYC filters
+- `GET   /api/v1/admin/users/{id}/dossier` — 360-degree comprehensive user dossier
+- `GET   /api/v1/admin/users/{id}/financials?from=&to=` — Time-filtered user financial audit
+- `GET   /api/v1/admin/reports/overview` — Executive real-time liquidity and volume report
+- `PATCH /api/v1/admin/users/{id}/status` — Account suspension and activation
+- `PATCH /api/v1/admin/wallets/{id}/freeze` — Freeze or unfreeze specific wallets
+
+### 15. System Health (`/health`, `/api/v1/health`, `/actuator/health`)
+- Dynamic health status probing live PostgreSQL connection and Redis cluster connectivity with ISO-8601 UTC timestamp.
 
 ---
 
-## 🚀 Quick Start (Running Locally)
+## 🚀 Getting Started
 
-### 1. Prerequisites
-- **Java 21+** (`openjdk 21`)
-- **PostgreSQL** running locally (`localhost:5432`, database: `pockt`, user: `pockt`, password: `pockt`)
-- **Redis** running locally (`localhost:6379`)
+### Prerequisites
+- **Java 21** (JDK 21+)
+- **PostgreSQL 15+** running locally on port `5432` (`pockt / pockt`)
+- **Redis 7+** running locally on port `6379`
 
-### 2. Run Test Suite
-```bash
-cd backend
-./gradlew test
-```
-Executes all unit tests, ArchUnit architectural rule validations, and both the 20-thread concurrency test and full Paytm ecosystem integration test.
-
-### 3. Run Dev Server
+### Run Backend
 ```bash
 cd backend
 ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
-### 4. Interactive Documentation & Health
-- **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-- **OpenAPI 3 JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
-- **Health Check**: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
+### Run All Tests
+```bash
+cd backend
+./gradlew test
+```
+
+### Swagger OpenAPI UI
+Once started, explore the interactive documentation:
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI Spec: `http://localhost:8080/v3/api-docs`
+- Health Probe: `http://localhost:8080/health`

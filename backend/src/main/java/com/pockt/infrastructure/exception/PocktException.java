@@ -2,11 +2,17 @@ package com.pockt.infrastructure.exception;
 
 import org.springframework.http.HttpStatus;
 
-public abstract class PocktException extends RuntimeException {
+public class PocktException extends RuntimeException {
     private final ErrorCode code;
     private final HttpStatus status;
 
     public PocktException(ErrorCode code, HttpStatus status, String message) {
+        super(message);
+        this.code = code;
+        this.status = status;
+    }
+
+    public PocktException(ErrorCode code, String message, HttpStatus status) {
         super(message);
         this.code = code;
         this.status = status;

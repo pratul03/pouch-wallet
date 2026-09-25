@@ -23,6 +23,7 @@ public class UserRepository extends BaseRepository {
             rs.getString("pin_hash"),
             rs.getString("fcm_token"),
             rs.getString("kyc_status"),
+            rs.getInt("kyc_tier"),
             rs.getString("role"),
             rs.getBoolean("is_active"),
             getInstant(rs, "created_at"),
@@ -35,8 +36,8 @@ public class UserRepository extends BaseRepository {
 
     public void create(User user) {
         String sql = """
-            INSERT INTO users (id, phone, full_name, pin_hash, fcm_token, kyc_status, role, is_active, created_at, updated_at)
-            VALUES (:id, :phone, :fullName, :pinHash, :fcmToken, :kycStatus, :role, :isActive, :createdAt, :updatedAt)
+            INSERT INTO users (id, phone, full_name, pin_hash, fcm_token, kyc_status, kyc_tier, role, is_active, created_at, updated_at)
+            VALUES (:id, :phone, :fullName, :pinHash, :fcmToken, :kycStatus, :kycTier, :role, :isActive, :createdAt, :updatedAt)
             """;
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("id", user.id())
@@ -45,6 +46,7 @@ public class UserRepository extends BaseRepository {
                 .addValue("pinHash", user.pinHash())
                 .addValue("fcmToken", user.fcmToken())
                 .addValue("kycStatus", user.kycStatus())
+                .addValue("kycTier", user.kycTier())
                 .addValue("role", user.role() != null ? user.role() : "USER")
                 .addValue("isActive", user.isActive())
                 .addValue("createdAt", java.sql.Timestamp.from(user.createdAt()))
@@ -54,7 +56,7 @@ public class UserRepository extends BaseRepository {
 
     public Optional<User> findById(UUID id) {
         String sql = """
-            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, role, is_active, created_at, updated_at
+            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, kyc_tier, role, is_active, created_at, updated_at
             FROM users
             WHERE id = :id AND is_active = TRUE
             """;
@@ -68,7 +70,7 @@ public class UserRepository extends BaseRepository {
 
     public Optional<User> findByIdAdmin(UUID id) {
         String sql = """
-            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, role, is_active, created_at, updated_at
+            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, kyc_tier, role, is_active, created_at, updated_at
             FROM users
             WHERE id = :id
             """;
@@ -82,7 +84,7 @@ public class UserRepository extends BaseRepository {
 
     public Optional<User> findByPhone(String phone) {
         String sql = """
-            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, role, is_active, created_at, updated_at
+            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, kyc_tier, role, is_active, created_at, updated_at
             FROM users
             WHERE phone = :phone AND is_active = TRUE
             """;
@@ -120,9 +122,14 @@ public class UserRepository extends BaseRepository {
         jdbc.update(sql, Map.of("id", id, "isActive", isActive));
     }
 
+    public void updateKycStatusAndTier(UUID id, String kycStatus, int kycTier) {
+        String sql = "UPDATE users SET kyc_status = :kycStatus, kyc_tier = :kycTier, updated_at = NOW() WHERE id = :id";
+        jdbc.update(sql, Map.of("id", id, "kycStatus", kycStatus, "kycTier", kycTier));
+    }
+
     public List<User> findAllUsers(String search, String kycStatus, Boolean isActive, int limit, int offset) {
         StringBuilder sql = new StringBuilder("""
-            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, role, is_active, created_at, updated_at
+            SELECT id, phone, full_name, pin_hash, fcm_token, kyc_status, kyc_tier, role, is_active, created_at, updated_at
             FROM users
             WHERE 1=1
             """);
