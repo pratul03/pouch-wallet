@@ -442,10 +442,13 @@ All responses follow the unified envelope:
 - `PATCH /api/v1/admin/users/{id}/status` — Account suspension and activation
 - `PATCH /api/v1/admin/wallets/{id}/freeze` — Freeze or unfreeze specific wallets
 
-### 15. Receipt Generation & Verification (`/api/v1/receipts`)
-- `GET  /api/v1/receipts/{reference}` — Structured JSON receipt for any transfer or bill payment
-- `GET  /api/v1/receipts/{reference}/download` — Downloadable print-ready HTML invoice receipt
-- `GET  /api/v1/receipts/verify/{hash}` — Public SHA-256 digital receipt integrity verification (no auth required)
+### 15. Receipt Generation & Emailing (`/api/v1/transfers`, `/api/v1/bills`, `/api/v1/receipts`)
+- `GET  /api/v1/transfers/{id}/receipt` — Official transaction receipt JSON with embedded print-ready HTML & SHA-256 signature
+- `GET  /api/v1/transfers/{id}/receipt/html` — Render print-ready HTML receipt invoice directly in browser
+- `POST /api/v1/transfers/{id}/send-receipt-email?email=` — Send receipt email with HTML invoice attachment
+- `GET  /api/v1/bills/{id}/receipt` — Official utility bill payment receipt
+- `POST /api/v1/bills/{id}/send-receipt-email?email=` — Send utility bill receipt email with HTML invoice attachment
+- `GET  /api/v1/receipts/{receiptId}/verify` — Public digital receipt integrity verification against immutable ledger (no auth required)
 
 ### 16. Queue & Dead Letter Queue (DLQ) Management (`/api/v1/admin/queue`)
 - `GET  /api/v1/admin/queue/metrics` — [Admin] Real-time outbox & DLQ metrics (counts by status)
