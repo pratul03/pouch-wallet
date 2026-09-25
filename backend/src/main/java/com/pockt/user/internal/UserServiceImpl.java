@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,7 +56,7 @@ public class UserServiceImpl implements UserService {
         if (purpose == OtpPurpose.REGISTRATION && userRepository.existsByPhone(phone)) {
             throw new PhoneAlreadyRegisteredException(phone);
         }
-        if (purpose == OtpPurpose.LOGIN && !userRepository.existsByPhone(phone)) {
+        if ((purpose == OtpPurpose.LOGIN || purpose == OtpPurpose.PIN_RESET) && !userRepository.existsByPhone(phone)) {
             throw new UserNotFoundException("No account registered with phone: " + phone);
         }
         otpService.send(phone, purpose);
@@ -91,6 +92,7 @@ public class UserServiceImpl implements UserService {
                 pinHash,
                 null,
                 "PENDING",
+                "USER",
                 true,
                 now,
                 now
@@ -98,10 +100,10 @@ public class UserServiceImpl implements UserService {
 
         userRepository.create(user);
 
-        // Publish event to trigger default wallet creation
+        // Publish event to trigger default wallet creation & default UPI handle creation
         eventPublisher.publishEvent(new UserRegisteredEvent(userId, phone));
 
-        String accessToken = jwtService.generateAccessToken(userId, phone);
+        String accessToken = jwtService.generateAccessToken(userId, phone, user.role());
         String refreshToken = jwtService.generateRefreshToken(userId);
 
         return new TokenResponse(userId, accessToken, refreshToken, jwtService.getAccessTokenTtlSeconds());
@@ -118,7 +120,23 @@ public class UserServiceImpl implements UserService {
             throw new BadCredentialsException();
         }
 
-        String accessToken = jwtService.generateAccessToken(user.id(), user.phone());
+        String accessToken = jwtService.generateAccessToken(user.id(), user.phone(), user.role());
+        String refreshToken = jwtService.generateRefreshToken(user.id());
+
+        return new TokenResponse(user.id(), accessToken, refreshToken, jwtService.getAccessTokenTtlSeconds());
+    }
+
+    @Override
+    @Transactional
+    public TokenResponse loginWithOtp(String phone, String otp) {
+        rateLimitService.checkLoginRateLimit(phone);
+
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new UserNotFoundException("No account registered with phone: " + phone));
+
+        otpService.verify(phone, otp, OtpPurpose.LOGIN);
+
+        String accessToken = jwtService.generateAccessToken(user.id(), user.phone(), user.role());
         String refreshToken = jwtService.generateRefreshToken(user.id());
 
         return new TokenResponse(user.id(), accessToken, refreshToken, jwtService.getAccessTokenTtlSeconds());
@@ -132,10 +150,9 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // Rotate refresh token
         jwtService.invalidateRefreshToken(refreshToken);
 
-        String newAccessToken = jwtService.generateAccessToken(user.id(), user.phone());
+        String newAccessToken = jwtService.generateAccessToken(user.id(), user.phone(), user.role());
         String newRefreshToken = jwtService.generateRefreshToken(user.id());
 
         return new TokenResponse(user.id(), newAccessToken, newRefreshToken, jwtService.getAccessTokenTtlSeconds());
@@ -145,6 +162,45 @@ public class UserServiceImpl implements UserService {
     public void logout(String refreshToken) {
         if (refreshToken != null && !refreshToken.isBlank()) {
             jwtService.invalidateRefreshToken(refreshToken);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void resetPin(String tempToken, String newPin) {
+        Claims claims = jwtService.parseAndValidateTempToken(tempToken);
+        String phone = claims.get("phone", String.class);
+        if (phone == null || phone.isBlank()) {
+            throw new InvalidTokenException("Temp token missing phone claim");
+        }
+
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new UserNotFoundException("No user found with phone: " + phone));
+
+        String newPinHash = passwordEncoder.encode(newPin);
+        userRepository.updatePinHash(user.id(), newPinHash);
+    }
+
+    @Override
+    @Transactional
+    public void changePin(UUID userId, String oldPin, String newPin) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        if (!passwordEncoder.matches(oldPin, user.pinHash())) {
+            throw new BadCredentialsException();
+        }
+
+        String newPinHash = passwordEncoder.encode(newPin);
+        userRepository.updatePinHash(userId, newPinHash);
+    }
+
+    @Override
+    public void verifyPin(UUID userId, String pin) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        if (!passwordEncoder.matches(pin, user.pinHash())) {
+            throw new BadCredentialsException();
         }
     }
 
@@ -173,7 +229,28 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
+    public UserResponse updateStatus(UUID userId, boolean isActive) {
+        userRepository.findByIdAdmin(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        userRepository.updateActiveStatus(userId, isActive);
+        return userRepository.findByIdAdmin(userId).map(UserResponse::fromDomain).orElseThrow();
+    }
+
+    @Override
     public Optional<UserResponse> findByPhone(String phone) {
         return userRepository.findByPhone(phone).map(UserResponse::fromDomain);
+    }
+
+    @Override
+    public List<UserResponse> listUsers(String search, String kycStatus, Boolean isActive, int limit, int offset) {
+        return userRepository.findAllUsers(search, kycStatus, isActive, limit, offset).stream()
+                .map(UserResponse::fromDomain)
+                .toList();
+    }
+
+    @Override
+    public long countUsers() {
+        return userRepository.countAllUsers();
     }
 }

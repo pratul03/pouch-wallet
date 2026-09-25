@@ -95,7 +95,7 @@ public class TransferServiceImpl implements TransferService {
             log.info("Idempotency match found for key={}: returning cached transaction {}", idempotencyKey, existing.id());
             Wallet senderWallet = walletService.getWalletForUpdate(existing.senderWalletId());
             UserResponse receiver = userService.findByPhone(request.receiverPhone())
-                    .orElse(new UserResponse(UUID.randomUUID(), request.receiverPhone(), "Recipient", "VERIFIED", Instant.now()));
+                    .orElse(new UserResponse(UUID.randomUUID(), request.receiverPhone(), "Recipient", "VERIFIED", "USER", true, Instant.now()));
 
             return TransferResponse.of(
                     existing.id(),

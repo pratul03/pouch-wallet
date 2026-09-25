@@ -63,7 +63,7 @@ class UserServiceTest {
         when(jwtService.parseAndValidateTempToken("valid-temp-token")).thenReturn(claims);
         when(userRepository.existsByPhone("+2348012345678")).thenReturn(false);
         when(passwordEncoder.encode("123456")).thenReturn("hashed-pin");
-        when(jwtService.generateAccessToken(any(), any())).thenReturn("access-token");
+        when(jwtService.generateAccessToken(any(), any(), any())).thenReturn("access-token");
         when(jwtService.generateRefreshToken(any())).thenReturn("refresh-token");
         when(jwtService.getAccessTokenTtlSeconds()).thenReturn(900L);
 
@@ -106,7 +106,7 @@ class UserServiceTest {
 
         when(userRepository.findByPhone("+2348012345678")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("123456", "hashed-pin")).thenReturn(true);
-        when(jwtService.generateAccessToken(user.id(), user.phone())).thenReturn("access-token");
+        when(jwtService.generateAccessToken(any(), any(), any())).thenReturn("access-token");
         when(jwtService.generateRefreshToken(user.id())).thenReturn("refresh-token");
         when(jwtService.getAccessTokenTtlSeconds()).thenReturn(900L);
 

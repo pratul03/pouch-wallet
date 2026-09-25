@@ -99,18 +99,23 @@ public class JwtService {
         }
     }
 
-    public String generateAccessToken(UUID userId, String phone) {
+    public String generateAccessToken(UUID userId, String phone, String role) {
         Instant now = Instant.now();
         Instant expiry = now.plusSeconds(accessTokenTtlSeconds);
 
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("phone", phone)
+                .claim("role", role != null ? role : "USER")
                 .claim("type", "ACCESS")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
                 .signWith(privateKey, Jwts.SIG.RS256)
                 .compact();
+    }
+
+    public String generateAccessToken(UUID userId, String phone) {
+        return generateAccessToken(userId, phone, "USER");
     }
 
     public String generateTempToken(String phone) {

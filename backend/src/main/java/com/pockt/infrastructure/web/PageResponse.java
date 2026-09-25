@@ -6,4 +6,8 @@ public record PageResponse<T>(
     List<T> items,
     String nextCursor,
     boolean hasMore
-) {}
+) {
+    public static <T> PageResponse<T> of(List<T> items, String nextCursor, boolean hasMore) {
+        return new PageResponse<>(items, nextCursor, hasMore);
+    }
+}

@@ -3,10 +3,12 @@ package com.pockt.user.api;
 import com.pockt.infrastructure.exception.InvalidTokenException;
 import com.pockt.infrastructure.web.ApiResponse;
 import com.pockt.user.dto.LoginRequest;
+import com.pockt.user.dto.OtpLoginRequest;
 import com.pockt.user.dto.OtpSendRequest;
 import com.pockt.user.dto.OtpVerifyRequest;
 import com.pockt.user.dto.RefreshTokenRequest;
 import com.pockt.user.dto.RegisterRequest;
+import com.pockt.user.dto.ResetPinRequest;
 import com.pockt.user.dto.TokenResponse;
 import com.pockt.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,7 +27,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Auth", description = "Authentication and registration endpoints")
+@Tag(name = "Auth", description = "Authentication, registration, and PIN management endpoints")
 public class AuthController {
 
     private final UserService userService;
@@ -42,7 +44,7 @@ public class AuthController {
     }
 
     @PostMapping("/otp/verify")
-    @Operation(summary = "Verify OTP and obtain temporary registration token")
+    @Operation(summary = "Verify OTP and obtain temporary registration/reset token")
     public ResponseEntity<ApiResponse<Map<String, String>>> verifyOtp(@Valid @RequestBody OtpVerifyRequest request) {
         String tempToken = userService.verifyOtp(request.phone(), request.otp(), request.purpose());
         return ResponseEntity.ok(ApiResponse.success(Map.of("tempToken", tempToken)));
@@ -66,6 +68,26 @@ public class AuthController {
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request) {
         TokenResponse response = userService.login(request);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/login/otp")
+    @Operation(summary = "Passwordless login with phone and OTP")
+    public ResponseEntity<ApiResponse<TokenResponse>> loginWithOtp(@Valid @RequestBody OtpLoginRequest request) {
+        TokenResponse response = userService.loginWithOtp(request.phone(), request.otp());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/pin/reset")
+    @Operation(summary = "Reset 6-digit PIN using verified OTP temporary token")
+    public ResponseEntity<ApiResponse<Map<String, String>>> resetPin(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody ResetPinRequest request) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new InvalidTokenException("Missing Bearer tempToken in Authorization header");
+        }
+        String tempToken = authHeader.substring(7).trim();
+        userService.resetPin(tempToken, request.newPin());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("message", "PIN reset successfully. Please login with your new PIN.")));
     }
 
     @PostMapping("/refresh")

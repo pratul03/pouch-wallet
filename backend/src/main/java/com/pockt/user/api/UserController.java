@@ -11,6 +11,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -49,6 +52,15 @@ public class UserController {
             @Valid @RequestBody UpdateUserRequest request) {
         UserResponse response = userService.updateProfile(principal.id(), request.fullName());
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/me/pin")
+    @Operation(summary = "Change PIN with current PIN verification")
+    public ResponseEntity<ApiResponse<Map<String, String>>> changePin(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody com.pockt.user.dto.ChangePinRequest request) {
+        userService.changePin(principal.id(), request.oldPin(), request.newPin());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("message", "PIN changed successfully.")));
     }
 
     @GetMapping("/search")

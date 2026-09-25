@@ -11,8 +11,13 @@ import java.util.UUID;
 
 public record UserPrincipal(
     UUID id,
-    String phone
+    String phone,
+    String role
 ) implements UserDetails, Principal {
+
+    public UserPrincipal(UUID id, String phone) {
+        this(id, phone, "USER");
+    }
 
     @Override
     public String getName() {
@@ -21,7 +26,8 @@ public record UserPrincipal(
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        String authority = role != null && !role.isBlank() ? "ROLE_" + role.toUpperCase() : "ROLE_USER";
+        return List.of(new SimpleGrantedAuthority(authority));
     }
 
     @Override
